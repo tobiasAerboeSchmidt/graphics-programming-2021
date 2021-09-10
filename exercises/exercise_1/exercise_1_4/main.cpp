@@ -1,9 +1,13 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
+
+#define _USE_MATH_DEFINES
+#include <cmath>
 #include <iostream>
 #include <vector>
-#include <cmath>
+
+using namespace  std;
 
 
 // function declarations
@@ -43,8 +47,6 @@ const char *fragmentShaderSource = "#version 330 core\n"
                                    "{\n"
                                    "   FragColor = vec4(vtxColor, 1.0);\n"
                                    "}\n\0";
-
-
 
 int main()
 {
@@ -173,28 +175,80 @@ void createArrayBuffer(const std::vector<float> &array, unsigned int &VBO){
     glBufferData(GL_ARRAY_BUFFER, array.size() * sizeof(GLfloat), &array[0], GL_STATIC_DRAW);
 }
 
-
+float angleToRad(float angle){
+    return angle*M_PI/180;
+}
 // create the geometry, a vertex array object representing it, and set how a shader program should read it
 // -------------------------------------------------------------------------------------------------------
 void setupShape(const unsigned int shaderProgram,unsigned int &VAO, unsigned int &vertexCount){
 
     unsigned int posVBO, colorVBO;
-    createArrayBuffer(std::vector<float>{
-            // position
-            0.0f,  0.0f, 0.0f,
-            0.5f,  0.0f, 0.0f,
-            0.5f,  0.5f, 0.0f
-    }, posVBO);
+    std::vector<float> vertices;
+    int polygonSize = 26;
+    for(int i = 0; i < polygonSize; i++) {
 
-    createArrayBuffer( std::vector<float>{
-            // color
-            1.0f,  0.0f, 0.0f,
-            1.0f,  0.0f, 0.0f,
-            1.0f,  0.0f, 0.0f
-    }, colorVBO);
+        // Center
+        vertices.push_back(0.0f);
+        vertices.push_back(0.0f);
+        vertices.push_back(0.0f);
+
+        //
+        float angle = (float) i  / polygonSize * 360;
+        vertices.push_back(cos(angleToRad(angle)));
+        vertices.push_back(sin(angleToRad(angle)));
+        vertices.push_back(0.0f);
+
+        angle = (float) (i+1) / polygonSize * 360;
+        if (angle == 360)
+            angle = 0;
+
+        vertices.push_back(cos(angleToRad(angle)));
+        vertices.push_back(sin(angleToRad(angle)));
+        vertices.push_back(0.0f);
+    }
+
+    createArrayBuffer(vertices, posVBO);
+
+    vector<float> colors;
+    cout << vertices.size();
+    for(int i = 0; i < vertices.size()/3; i++){
+        if (i % 3 == 0) {
+            colors.push_back(1);
+            colors.push_back(0);
+            colors.push_back(0);
+            colors.push_back(1);
+            colors.push_back(0);
+            colors.push_back(0);
+            colors.push_back(1);
+            colors.push_back(0);
+            colors.push_back(0);
+        } else if ((i+1) % 3 == 0) {
+            colors.push_back(0);
+            colors.push_back(1);
+            colors.push_back(0);
+            colors.push_back(0);
+            colors.push_back(1);
+            colors.push_back(0);
+            colors.push_back(0);
+            colors.push_back(1);
+            colors.push_back(0);
+        } else {
+            colors.push_back(0);
+            colors.push_back(0);
+            colors.push_back(1);
+            colors.push_back(0);
+            colors.push_back(0);
+            colors.push_back(1);
+            colors.push_back(0);
+            colors.push_back(0);
+            colors.push_back(1);
+        }
+    }
+
+    createArrayBuffer( colors, colorVBO);
 
     // tell how many vertices to draw
-    vertexCount = 3;
+    vertexCount = polygonSize * 3;
 
     // create a vertex array object (VAO) on OpenGL and save a handle to it
     glGenVertexArrays(1, &VAO);
@@ -220,6 +274,8 @@ void setupShape(const unsigned int shaderProgram,unsigned int &VAO, unsigned int
     glEnableVertexAttribArray(colorAttributeLocation);
     glVertexAttribPointer(colorAttributeLocation, colorSize, GL_FLOAT, GL_FALSE, 0, 0);
 
+    // Wireframe
+    //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 }
 
 
@@ -233,7 +289,6 @@ void draw(const unsigned int shaderProgram, const unsigned int VAO, const unsign
     // draw geometry
     glDrawArrays(GL_TRIANGLES, 0, vertexCount);
 }
-
 
 // process all input: query GLFW whether relevant keys are pressed/released this frame and react accordingly
 // ---------------------------------------------------------------------------------------------------------

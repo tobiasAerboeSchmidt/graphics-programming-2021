@@ -173,7 +173,11 @@ void createArrayBuffer(const std::vector<float> &array, unsigned int &VBO){
     glBufferData(GL_ARRAY_BUFFER, array.size() * sizeof(GLfloat), &array[0], GL_STATIC_DRAW);
 }
 
-
+void rotateShape(std::vector<float> posVBO){
+    for (int i = 0; i < posVBO.size()/3; i++){
+        
+    }
+}
 // create the geometry, a vertex array object representing it, and set how a shader program should read it
 // -------------------------------------------------------------------------------------------------------
 void setupShape(const unsigned int shaderProgram,unsigned int &VAO, unsigned int &vertexCount){
@@ -181,20 +185,26 @@ void setupShape(const unsigned int shaderProgram,unsigned int &VAO, unsigned int
     unsigned int posVBO, colorVBO;
     createArrayBuffer(std::vector<float>{
             // position
-            0.0f,  0.0f, 0.0f,
-            0.5f,  0.0f, 0.0f,
-            0.5f,  0.5f, 0.0f
+            -.5f,  -.5f, 0.0f,
+            0.5f,  -.5f, 0.0f,
+            0.5f,  0.5f, 0.0f,
+            -.5f,  -.5f, 0.0f,
+            0.5f,  0.5f, 0.0f,
+            -.5f,  0.5f, 0.0f
     }, posVBO);
 
     createArrayBuffer( std::vector<float>{
             // color
-            1.0f,  0.0f, 0.0f,
-            1.0f,  0.0f, 0.0f,
-            1.0f,  0.0f, 0.0f
+            1.0f,  1.0f, 1.0f,
+            1.0f,  1.0f, 1.0f,
+            1.0f,  1.0f, 1.0f,
+            1.0f,  1.0f, 1.0f,
+            1.0f,  1.0f, 1.0f,
+            1.0f,  1.0f, 1.0f
     }, colorVBO);
 
     // tell how many vertices to draw
-    vertexCount = 3;
+    vertexCount = 6;
 
     // create a vertex array object (VAO) on OpenGL and save a handle to it
     glGenVertexArrays(1, &VAO);

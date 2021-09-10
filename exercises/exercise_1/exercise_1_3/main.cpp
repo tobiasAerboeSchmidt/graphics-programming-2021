@@ -179,22 +179,29 @@ void createArrayBuffer(const std::vector<float> &array, unsigned int &VBO){
 void setupShape(const unsigned int shaderProgram,unsigned int &VAO, unsigned int &vertexCount){
 
     unsigned int posVBO, colorVBO;
+
     createArrayBuffer(std::vector<float>{
             // position
-             0.0f,  0.0f, 0.0f,
-             0.5f,  0.0f, 0.0f,
-             0.5f,  0.5f, 0.0f
+            -.5f, -.5f, 0.0f, //BL
+            0.5f, -.5f, 0.0f, //BR
+            0.5f, 0.5f, 0.0f, //TR
+            -.5f, -.5f, 0.0f, //BL
+            0.5f, 0.5f, 0.0f, //TR
+            -.5f, 0.5f, 0.0f  //TL
     }, posVBO);
 
     createArrayBuffer( std::vector<float>{
             // color
-            1.0f,  0.0f, 0.0f,
-            1.0f,  0.0f, 0.0f,
-            1.0f,  0.0f, 0.0f
+            1.0f, 1.0f, 1.0f,
+            1.0f, 1.0f, 1.0f,
+            1.0f, 1.0f, 1.0f,
+            1.0f, 0.0f, 0.0f,
+            0.0f, 0.0f, 1.0f,
+            0.0f, 1.0f, 0.0f,
     }, colorVBO);
 
     // tell how many vertices to draw
-    vertexCount = 3;
+    vertexCount = 6;
 
     // create a vertex array object (VAO) on OpenGL and save a handle to it
     glGenVertexArrays(1, &VAO);
