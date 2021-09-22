@@ -178,20 +178,16 @@ void createArrayBuffer(const std::vector<float> &array, unsigned int &VBO){
 // -------------------------------------------------------------------------------------------------------
 void setupShape(const unsigned int shaderProgram,unsigned int &VAO, unsigned int &vertexCount){
 
-    unsigned int posVBO, colorVBO;
+    unsigned int posAndColVBO;
     createArrayBuffer(std::vector<float>{
             // position
             0.0f,  0.0f, 0.0f,
+            1.0f,  0.0f, 0.0f,
             0.5f,  0.0f, 0.0f,
-            0.5f,  0.5f, 0.0f
-    }, posVBO);
-
-    createArrayBuffer( std::vector<float>{
-            // color
             1.0f,  0.0f, 0.0f,
-            1.0f,  0.0f, 0.0f,
+            0.5f,  0.5f, 0.0f,
             1.0f,  0.0f, 0.0f
-    }, colorVBO);
+    }, posAndColVBO);
 
     // tell how many vertices to draw
     vertexCount = 3;
@@ -203,23 +199,19 @@ void setupShape(const unsigned int shaderProgram,unsigned int &VAO, unsigned int
     glBindVertexArray(VAO);
 
     // set vertex shader attribute "aPos"
-    glBindBuffer(GL_ARRAY_BUFFER, posVBO);
+    glBindBuffer(GL_ARRAY_BUFFER, posAndColVBO);
 
     int posSize = 3;
     int posAttributeLocation = glGetAttribLocation(shaderProgram, "aPos");
 
     glEnableVertexAttribArray(posAttributeLocation);
-    glVertexAttribPointer(posAttributeLocation, posSize, GL_FLOAT, GL_FALSE, 0, 0);
+    glVertexAttribPointer(posAttributeLocation, posSize, GL_FLOAT, GL_FALSE, 6*sizeof(float), 0);
 
-    // set vertex shader attribute "aColor"
-    glBindBuffer(GL_ARRAY_BUFFER, colorVBO);
+    int colSize = 3;
+    int colAttributeLocation = glGetAttribLocation(shaderProgram, "aColor");
 
-    int colorSize = 3;
-    int colorAttributeLocation = glGetAttribLocation(shaderProgram, "aColor");
-
-    glEnableVertexAttribArray(colorAttributeLocation);
-    glVertexAttribPointer(colorAttributeLocation, colorSize, GL_FLOAT, GL_FALSE, 0, 0);
-
+    glEnableVertexAttribArray(colAttributeLocation);
+    glVertexAttribPointer(colAttributeLocation, colSize, GL_FLOAT, GL_FALSE, 6*sizeof(float), (void*)(12));
 }
 
 

@@ -1,9 +1,13 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
+
+#define _USE_MATH_DEFINES
+#include <cmath>
 #include <iostream>
 #include <vector>
-#include <cmath>
+
+using namespace  std;
 
 
 // function declarations
@@ -43,8 +47,6 @@ const char *fragmentShaderSource = "#version 330 core\n"
                                    "{\n"
                                    "   FragColor = vec4(vtxColor, 1.0);\n"
                                    "}\n\0";
-
-
 
 int main()
 {
@@ -173,28 +175,57 @@ void createArrayBuffer(const std::vector<float> &array, unsigned int &VBO){
     glBufferData(GL_ARRAY_BUFFER, array.size() * sizeof(GLfloat), &array[0], GL_STATIC_DRAW);
 }
 
-
+float angleToRad(float angle){
+    return angle*M_PI/180;
+}
 // create the geometry, a vertex array object representing it, and set how a shader program should read it
 // -------------------------------------------------------------------------------------------------------
 void setupShape(const unsigned int shaderProgram,unsigned int &VAO, unsigned int &vertexCount){
 
-    unsigned int posVBO, colorVBO;
-    createArrayBuffer(std::vector<float>{
-            // position
-            0.0f,  0.0f, 0.0f,
-            0.5f,  0.0f, 0.0f,
-            0.5f,  0.5f, 0.0f
-    }, posVBO);
+    unsigned int colAndPosVBO;
+    vector<float> vertices;
+    vector<float> colors;
 
-    createArrayBuffer( std::vector<float>{
-            // color
-            1.0f,  0.0f, 0.0f,
-            1.0f,  0.0f, 0.0f,
-            1.0f,  0.0f, 0.0f
-    }, colorVBO);
+    int polygonSize = 52;
+    int radius = .5f;
+    for(int i = 0; i < polygonSize; i++) {
+
+        // Center
+        vertices.push_back(0.0f);
+        vertices.push_back(0.0f);
+        vertices.push_back(0.0f);
+
+        vertices.push_back(0.5f);
+        vertices.push_back(0.5f);
+        vertices.push_back(0.5f);
+
+        //
+        float angle = (float) i  / polygonSize * 360;
+        vertices.push_back(cos(angleToRad(angle)));
+        vertices.push_back(sin(angleToRad(angle)));
+        vertices.push_back(0.0f);
+
+        vertices.push_back(cos(angleToRad(angle)) + 0.5f);
+        vertices.push_back(sin(angleToRad(angle)) + 0.5f);
+        vertices.push_back(0.5f);
+
+        angle = (float) (i+1) / polygonSize * 360;
+        if (angle == 360)
+            angle = 0;
+
+        vertices.push_back(cos(angleToRad(angle)));
+        vertices.push_back(sin(angleToRad(angle)));
+        vertices.push_back(0.0f);
+
+        vertices.push_back(cos(angleToRad(angle)) + 0.5f);
+        vertices.push_back(sin(angleToRad(angle)) + 0.5f);
+        vertices.push_back(0.5f);
+    }
+
+    createArrayBuffer(vertices, colAndPosVBO);
 
     // tell how many vertices to draw
-    vertexCount = 3;
+    vertexCount = vertices.size();
 
     // create a vertex array object (VAO) on OpenGL and save a handle to it
     glGenVertexArrays(1, &VAO);
@@ -203,23 +234,22 @@ void setupShape(const unsigned int shaderProgram,unsigned int &VAO, unsigned int
     glBindVertexArray(VAO);
 
     // set vertex shader attribute "aPos"
-    glBindBuffer(GL_ARRAY_BUFFER, posVBO);
+    glBindBuffer(GL_ARRAY_BUFFER, colAndPosVBO);
 
     int posSize = 3;
     int posAttributeLocation = glGetAttribLocation(shaderProgram, "aPos");
 
     glEnableVertexAttribArray(posAttributeLocation);
-    glVertexAttribPointer(posAttributeLocation, posSize, GL_FLOAT, GL_FALSE, 0, 0);
-
-    // set vertex shader attribute "aColor"
-    glBindBuffer(GL_ARRAY_BUFFER, colorVBO);
+    glVertexAttribPointer(posAttributeLocation, posSize, GL_FLOAT, GL_FALSE, 6*sizeof(float), 0);
 
     int colorSize = 3;
     int colorAttributeLocation = glGetAttribLocation(shaderProgram, "aColor");
 
     glEnableVertexAttribArray(colorAttributeLocation);
-    glVertexAttribPointer(colorAttributeLocation, colorSize, GL_FLOAT, GL_FALSE, 0, 0);
+    glVertexAttribPointer(colorAttributeLocation, colorSize, GL_FLOAT, GL_FALSE, 6*sizeof(float), (void*)(12));
 
+    // Wireframe
+    //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 }
 
 
@@ -234,7 +264,6 @@ void draw(const unsigned int shaderProgram, const unsigned int VAO, const unsign
     glDrawArrays(GL_TRIANGLES, 0, vertexCount);
 }
 
-
 // process all input: query GLFW whether relevant keys are pressed/released this frame and react accordingly
 // ---------------------------------------------------------------------------------------------------------
 void processInput(GLFWwindow *window)
@@ -248,7 +277,7 @@ void processInput(GLFWwindow *window)
 // ---------------------------------------------------------------------------------------------
 void framebufferSizeCallback(GLFWwindow* window, int width, int height)
 {
-    // make sure the viewport matches the new window dimensions; note that width and 
+    // make sure the viewport matches the new window dimensions; note that width and
     // height will be significantly larger than specified on retina displays.
     glViewport(0, 0, width, height);
 }

@@ -195,12 +195,12 @@ void setupShape(const unsigned int shaderProgram,unsigned int &VAO, unsigned int
 
     createArrayBuffer( std::vector<float>{
             // color
-            1.0f,  1.0f, 1.0f,
-            1.0f,  1.0f, 1.0f,
-            1.0f,  1.0f, 1.0f,
-            1.0f,  1.0f, 1.0f,
-            1.0f,  1.0f, 1.0f,
-            1.0f,  1.0f, 1.0f
+            0.0f,  0.0f, 1.0f,
+            0.0f,  0.0f, 1.0f,
+            0.0f,  0.0f, 1.0f,
+            0.0f,  0.0f, 1.0f,
+            0.0f,  0.0f, 1.0f,
+            0.0f,  0.0f, 1.0f
     }, colorVBO);
 
     // tell how many vertices to draw

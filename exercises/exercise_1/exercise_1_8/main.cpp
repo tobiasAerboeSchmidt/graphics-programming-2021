@@ -1,9 +1,13 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
+
+#define _USE_MATH_DEFINES
+#include <cmath>
 #include <iostream>
 #include <vector>
-#include <cmath>
+
+using namespace  std;
 
 
 // function declarations
@@ -11,6 +15,7 @@
 void createArrayBuffer(const std::vector<float> &array, unsigned int &VBO);
 void setupShape(unsigned int shaderProgram, unsigned int &VAO, unsigned int &vertexCount);
 void draw(unsigned int shaderProgram, unsigned int VAO, unsigned int vertexCount);
+void drawElements(unsigned int shaderProgram, unsigned int VAO, unsigned int indicesCount);
 
 
 // glfw functions
@@ -43,8 +48,6 @@ const char *fragmentShaderSource = "#version 330 core\n"
                                    "{\n"
                                    "   FragColor = vec4(vtxColor, 1.0);\n"
                                    "}\n\0";
-
-
 
 int main()
 {
@@ -129,10 +132,10 @@ int main()
 
     // setup vertex array object (VAO)
     // -------------------------------
-    unsigned int VAO, vertexCount;
+    unsigned int VAO, vertexCount, indicesCount;
     // generate geometry in a vertex array object (VAO), record the number of vertices in the mesh,
     // tells the shader how to read it
-    setupShape(shaderProgram, VAO, vertexCount);
+    setupShape(shaderProgram, VAO, indicesCount);
 
 
     // render loop
@@ -147,7 +150,9 @@ int main()
         glClearColor(.2f, .2f, .2f, 1.0f); // background
         glClear(GL_COLOR_BUFFER_BIT); // clear the framebuffer
 
-        draw(shaderProgram, VAO, vertexCount);
+
+        drawElements(shaderProgram, VAO, indicesCount);
+
 
         // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
         // -------------------------------------------------------------------------------
@@ -173,53 +178,109 @@ void createArrayBuffer(const std::vector<float> &array, unsigned int &VBO){
     glBufferData(GL_ARRAY_BUFFER, array.size() * sizeof(GLfloat), &array[0], GL_STATIC_DRAW);
 }
 
-
+float angleToRad(float angle){
+    return angle*M_PI/180;
+}
 // create the geometry, a vertex array object representing it, and set how a shader program should read it
 // -------------------------------------------------------------------------------------------------------
-void setupShape(const unsigned int shaderProgram,unsigned int &VAO, unsigned int &vertexCount){
+void setupShape(const unsigned int shaderProgram,unsigned int &VAO, unsigned int &indicesCount){
 
-    unsigned int posVBO, colorVBO;
-    createArrayBuffer(std::vector<float>{
-            // position
-            0.0f,  0.0f, 0.0f,
-            0.5f,  0.0f, 0.0f,
-            0.5f,  0.5f, 0.0f
-    }, posVBO);
+    unsigned int VBO, EBO;
+    vector<float> vertices;
+    int polygonSize = 8;
+    unsigned int indices[polygonSize*6];
+    int radius = .5f;
 
-    createArrayBuffer( std::vector<float>{
-            // color
-            1.0f,  0.0f, 0.0f,
-            1.0f,  0.0f, 0.0f,
-            1.0f,  0.0f, 0.0f
-    }, colorVBO);
+    // Center
+    vertices.push_back(0.0f);
+    vertices.push_back(0.0f);
+    vertices.push_back(0.0f);
+
+    vertices.push_back(1.0f);
+    vertices.push_back(0.0f);
+    vertices.push_back(0.0f);
+
+    for(int i = 0; i < polygonSize; i++) {
+        //Vertices
+        float angle = (float) i  / polygonSize * 360;
+        vertices.push_back(cos(angleToRad(angle)));
+        vertices.push_back(sin(angleToRad(angle)));
+        vertices.push_back(0.0f);
+
+        //vertices.push_back(cos(angleToRad(angle)) + 0.5f);
+        //vertices.push_back(sin(angleToRad(angle)) + 0.5f);
+        //vertices.push_back(0.5f);
+
+        vertices.push_back(1.0f);
+        vertices.push_back(0.0f);
+        vertices.push_back(0.0f);
+
+        angle = (float) (i+1) / polygonSize * 360;
+        if (angle == 360)
+            angle = 0;
+
+        vertices.push_back(cos(angleToRad(angle)));
+        vertices.push_back(sin(angleToRad(angle)));
+        vertices.push_back(0.0f);
+
+        vertices.push_back(1.0f);
+        vertices.push_back(0.0f);
+        vertices.push_back(0.0f);
+
+        indices[6*i] = 0;
+        indices[6*i+1] = i*4 + 2;
+        indices[6*i+2] = i*4 + 4;
+        indices[6*i+3] = 1;
+        indices[6*i+4] = i*4 + 3;
+        indices[6*i+5] = i*4 + 5;
+
+    }
+
+    for (int i = 0; i < polygonSize*6; i++){
+        if (i % 6 == 0) cout << ',';
+        cout << indices[i] << ' ';
+
+    }
+
+    cout << '\n';
+
+    for (int i = 0; i < polygonSize*6; i++){
+        if (i % 6 == 0) cout << ',';
+        cout << vertices[i] << ' ';
+
+    }
 
     // tell how many vertices to draw
-    vertexCount = 3;
+    indicesCount = sizeof(indices)/sizeof(indices[0]);
 
-    // create a vertex array object (VAO) on OpenGL and save a handle to it
     glGenVertexArrays(1, &VAO);
+    glGenBuffers(1, &VBO);
+    glGenBuffers(1, &EBO);
 
-    // bind vertex array object
     glBindVertexArray(VAO);
 
-    // set vertex shader attribute "aPos"
-    glBindBuffer(GL_ARRAY_BUFFER, posVBO);
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), &vertices[0], GL_STATIC_DRAW);
+
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
 
     int posSize = 3;
     int posAttributeLocation = glGetAttribLocation(shaderProgram, "aPos");
 
     glEnableVertexAttribArray(posAttributeLocation);
-    glVertexAttribPointer(posAttributeLocation, posSize, GL_FLOAT, GL_FALSE, 0, 0);
-
-    // set vertex shader attribute "aColor"
-    glBindBuffer(GL_ARRAY_BUFFER, colorVBO);
+    glVertexAttribPointer(posAttributeLocation, posSize, GL_FLOAT, GL_FALSE, 4*sizeof(float), 0);
 
     int colorSize = 3;
     int colorAttributeLocation = glGetAttribLocation(shaderProgram, "aColor");
 
     glEnableVertexAttribArray(colorAttributeLocation);
-    glVertexAttribPointer(colorAttributeLocation, colorSize, GL_FLOAT, GL_FALSE, 0, 0);
+    glVertexAttribPointer(colorAttributeLocation, colorSize, GL_FLOAT, GL_FALSE, 4*sizeof(float), (void*)(12));
 
+
+
+    // Wireframe
+    //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 }
 
 
@@ -234,6 +295,14 @@ void draw(const unsigned int shaderProgram, const unsigned int VAO, const unsign
     glDrawArrays(GL_TRIANGLES, 0, vertexCount);
 }
 
+void drawElements(const unsigned int shaderProgram, const unsigned int VAO, const unsigned int indicesCount){
+    // set active shader program
+    glUseProgram(shaderProgram);
+    // bind vertex array object
+    glBindVertexArray(VAO);
+    // draw geometry
+    glDrawElements(GL_TRIANGLES, indicesCount, GL_UNSIGNED_INT, 0);
+}
 
 // process all input: query GLFW whether relevant keys are pressed/released this frame and react accordingly
 // ---------------------------------------------------------------------------------------------------------
@@ -248,7 +317,7 @@ void processInput(GLFWwindow *window)
 // ---------------------------------------------------------------------------------------------
 void framebufferSizeCallback(GLFWwindow* window, int width, int height)
 {
-    // make sure the viewport matches the new window dimensions; note that width and 
+    // make sure the viewport matches the new window dimensions; note that width and
     // height will be significantly larger than specified on retina displays.
     glViewport(0, 0, width, height);
 }
