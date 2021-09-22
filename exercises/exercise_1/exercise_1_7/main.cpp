@@ -184,7 +184,6 @@ void setupShape(const unsigned int shaderProgram,unsigned int &VAO, unsigned int
 
     unsigned int colAndPosVBO;
     vector<float> vertices;
-    vector<float> colors;
 
     int polygonSize = 52;
     int radius = .5f;
