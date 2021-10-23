@@ -95,9 +95,6 @@ int main()
         glUseProgram(activeShader->ID);
 
         // TODO voronoi 1.3
-        // Iterate through the scene objects, for each object:
-        // - bind the VAO; set the uniform variables; and draw.
-        // CODE HERE
         for(SceneObject cone : sceneObjects){
             //Offset uniform
             int vertexOffsetLocation = glGetUniformLocation(activeShader->ID, "offset");
@@ -110,7 +107,8 @@ int main()
 
             //Bind VAO
             glBindVertexArray(cone.VAO);
-            //Draw
+
+            //Draw cone
             glDrawArrays(GL_TRIANGLES, 0, cone.vertexCount);
         }
 
@@ -128,7 +126,6 @@ int main()
 // creates a cone triangle mesh, uploads it to openGL and returns the VAO associated to the mesh
 SceneObject instantiateCone(float r, float g, float b, float offsetX, float offsetY){
     // TODO voronoi 1.1
-    // (exercises 1.7 and 1.8 can help you with implementing this function)
 
     // Create an instance of a SceneObject,
     SceneObject sceneObject{};
@@ -143,16 +140,17 @@ SceneObject instantiateCone(float r, float g, float b, float offsetX, float offs
     // Build the geometry into an std::vector<float> or float array.
     vector<float> vertices;
 
+    // Generate vertices for the cone
     int polygonSize = 256;
-    int radius = 3.0f;
+    int radius = 3.f;
     for(int i = 0; i < polygonSize; i++) {
         // Center
         vertices.push_back(0.0f);
         vertices.push_back(0.0f);
         vertices.push_back(1.0f);
 
-        //
         float angle = (float) i  / polygonSize * 360;
+
         vertices.push_back(cos(angleToRad(angle))*radius);
         vertices.push_back(sin(angleToRad(angle))*radius);
         vertices.push_back(0.0f);
@@ -179,9 +177,6 @@ SceneObject instantiateCone(float r, float g, float b, float offsetX, float offs
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
     glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(GLfloat), &vertices[0], GL_STATIC_DRAW);
     glBindVertexArray(VAO);
-
-    // set the content of the VBO (type, size, pointer to start, and how it is used)
-
 
     // Set the position attribute pointers in the shader.
     int posSize = 3;
