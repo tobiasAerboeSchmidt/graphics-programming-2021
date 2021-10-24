@@ -88,7 +88,7 @@ int main()
 
     // build and compile our shader program
     // ------------------------------------
-    shaderProgram = new Shader("shaders/shader.vert", "shaders/shader.frag");
+    shaderProgram = new Shader("shaders/objectShader.vert", "shaders/objectShader.frag");
 
     // the model was originally baked with lights for a left handed coordinate system, we are "fixing" the z-coordinate
     // so we can work with a right handed coordinate system

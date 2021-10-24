@@ -73,9 +73,9 @@ int main()
 
     // NEW!
     // build and compile the shader programs
-    shaderPrograms.push_back(Shader("shaders/shader.vert", "shaders/color.frag"));
-    shaderPrograms.push_back(Shader("shaders/shader.vert", "shaders/distance.frag"));
-    shaderPrograms.push_back(Shader("shaders/shader.vert", "shaders/distance_color.frag"));
+    shaderPrograms.push_back(Shader("shaders/objectShader.vert", "shaders/color.frag"));
+    shaderPrograms.push_back(Shader("shaders/objectShader.vert", "shaders/distance.frag"));
+    shaderPrograms.push_back(Shader("shaders/objectShader.vert", "shaders/distance_color.frag"));
     activeShader = &shaderPrograms[0];
 
     // NEW!

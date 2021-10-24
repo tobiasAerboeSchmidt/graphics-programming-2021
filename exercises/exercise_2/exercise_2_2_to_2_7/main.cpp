@@ -25,7 +25,7 @@ unsigned int VAO, VBO;                          // vertex array and buffer objec
 const unsigned int vertexBufferSize = 65536;    // # of particles
 
 // TODO 2.2 update the number of attributes in a particle
-const unsigned int particleSize = 2;            // particle attributes
+const unsigned int particleSize = 5;            // particle attributes
 
 const unsigned int sizeOfFloat = 4;             // bytes in a float
 unsigned int particleId = 0;                    // keep track of last particle to be updated
@@ -85,6 +85,10 @@ int main()
 
     // render loop
     // -----------
+
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_DST_ALPHA);
+
     while (!glfwWindowShouldClose(window))
     {
         // update current time
@@ -103,7 +107,8 @@ int main()
         shaderProgram->use();
 
         // TODO 2.3 set uniform variable related to current time
-
+        int vertexOffsetLocation = glGetUniformLocation(shaderProgram->ID, "currentTime");
+        glUniform1f(vertexOffsetLocation, currentTime);
 
 
         // render particles
@@ -140,7 +145,15 @@ void bindAttributes(){
     glVertexAttribPointer(vertexLocation, posSize, GL_FLOAT, GL_FALSE, particleSize * sizeOfFloat, 0);
 
     // TODO 2.2 set velocity and timeOfBirth shader attributes
+    int velocitySize = 2;
+    GLuint vertexVelocity = glGetAttribLocation(shaderProgram->ID, "velocity");
+    glEnableVertexAttribArray(vertexVelocity);
+    glVertexAttribPointer(vertexVelocity, velocitySize, GL_FLOAT, GL_FALSE, particleSize * sizeOfFloat, (void*) (posSize * sizeOfFloat));
 
+    int timeOfBirthSize = 1;
+    GLuint timeOfBirthLocation = glGetAttribLocation(shaderProgram->ID, "timeOfBirth");
+    glEnableVertexAttribArray(timeOfBirthLocation);
+    glVertexAttribPointer(timeOfBirthLocation, timeOfBirthSize, GL_FLOAT, GL_FALSE, particleSize * sizeOfFloat, (void*)((posSize + velocitySize) * sizeOfFloat));
 
 
 }
@@ -168,10 +181,11 @@ void emitParticle(float x, float y, float velocityX, float velocityY, float time
     float data[particleSize];
     data[0] = x;
     data[1] = y;
+    data[2] = velocityX;
+    data[3] = velocityY;
+    data[4] = timeOfBirth;
 
     // TODO 2.2 , add velocity and timeOfBirth to the particle data
-
-
 
     // upload only parts of the buffer
     glBufferSubData(GL_ARRAY_BUFFER, particleId * particleSize * sizeOfFloat, particleSize * sizeOfFloat, data);

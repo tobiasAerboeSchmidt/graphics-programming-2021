@@ -1,5 +1,7 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
+#include <stdlib.h>
+
 #include <iostream>
 
 #include <vector>
@@ -8,11 +10,27 @@
 #include "shader.h"
 #include "glmutils.h"
 
-#include "plane_model.h"
 #include "primitives.h"
 
-// structure to hold render info
-// -----------------------------
+// application global variables
+float lastX, lastY;                             // used to compute delta movement of the mouse
+const unsigned int particlesCount = 10000;    // # of particles
+const unsigned int particleSize = 3;            // particle attributes
+const unsigned int sizeOfFloat = 4;             // bytes in a float
+unsigned int particleId = 0;                    // keep track of last particle to be updated
+float boxSize = 30; // Box size of 30m as defined in the paper
+
+// Create offsets and offset deltas for each simulation
+const unsigned int numberOfSimulations = 10;
+std::vector<float> gravityOffsets(numberOfSimulations);
+std::vector<float> xWindOffsets(numberOfSimulations);
+std::vector<float> zWindOffsets(numberOfSimulations);
+std::vector<float> gravityOffsetDeltas(numberOfSimulations);
+std::vector<float> xWindOffsetDeltas(numberOfSimulations);
+std::vector<float> zWindOffsetDeltas(numberOfSimulations);
+
+
+
 struct SceneObject{
     unsigned int VAO;
     unsigned int vertexCount;
@@ -22,13 +40,26 @@ struct SceneObject{
     }
 };
 
+struct ParticlesObject{
+    unsigned int VAO;
+    unsigned int vertexCount;
+    void drawParticlesObject() const{
+        glBindVertexArray(VAO);
+        glDrawArrays(GL_POINTS, 0, vertexCount);
+    }
+};
+
 // function declarations
 // ---------------------
+unsigned int createParticleVertexArray();
+void initializeOffsetsAndOffsetDeltas();
 unsigned int createArrayBuffer(const std::vector<float> &array);
 unsigned int createElementArrayBuffer(const std::vector<unsigned int> &array);
 unsigned int createVertexArray(const std::vector<float> &positions, const std::vector<float> &colors, const std::vector<unsigned int> &indices);
+float randBetween(float min, float max);
 void setup();
 void drawObjects();
+void drawParticles();
 
 // glfw and input functions
 // ------------------------
@@ -37,21 +68,21 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void processInput(GLFWwindow* window);
 void cursor_input_callback(GLFWwindow* window, double posX, double posY);
 void drawCube(glm::mat4 model);
-void drawPlane(glm::mat4 model);
 
 // screen settings
 // ---------------
 const unsigned int SCR_WIDTH = 600;
 const unsigned int SCR_HEIGHT = 600;
 
+// P
+
 // global variables used for rendering
 // -----------------------------------
 SceneObject cube;
 SceneObject floorObj;
-SceneObject planeBody;
-SceneObject planeWing;
-SceneObject planePropeller;
+ParticlesObject particlesObject;
 Shader* shaderProgram;
+Shader* particleShaderProgram;
 
 // global variables used for control
 // ---------------------------------
@@ -59,6 +90,7 @@ float currentTime;
 glm::vec3 camForward(.0f, .0f, -1.0f);
 glm::vec3 camPosition(.0f, 1.6f, 0.0f);
 float linearSpeed = 0.15f, rotationGain = 30.0f;
+
 
 
 int main()
@@ -76,7 +108,7 @@ int main()
 
     // glfw window creation
     // --------------------
-    GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Exercise 5.2", NULL, NULL);
+    GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Weather effects", NULL, NULL);
     if (window == NULL)
     {
         std::cout << "Failed to create GLFW window" << std::endl;
@@ -108,7 +140,9 @@ int main()
     glDepthRange(-1,1); // make the NDC a LEFT handed coordinate system, with the camera pointing towards +z
     glEnable(GL_DEPTH_TEST); // turn on z-buffer depth test
     glDepthFunc(GL_LESS); // draws fragments that are closer to the screen in NDC
-
+    glEnable(GL_VERTEX_PROGRAM_POINT_SIZE);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     // render loop
     // -----------
@@ -130,8 +164,20 @@ int main()
         // notice that we also need to clear the depth buffer (aka z-buffer) every new frame
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+        // Draw objects
+        // ------------
         shaderProgram->use();
         drawObjects();
+
+        // Draw particles
+        // --------------
+
+        particleShaderProgram->use();
+        particleShaderProgram->setVec3("camPosition", camPosition);
+        particleShaderProgram->setVec3("forwardPosition", camPosition);
+        particleShaderProgram->setFloat("boxSize", boxSize);
+
+        drawParticles();
 
         glfwSwapBuffers(window);
         glfwPollEvents();
@@ -144,13 +190,13 @@ int main()
     }
 
     delete shaderProgram;
+    delete particleShaderProgram;
 
     // glfw: terminate, clearing all previously allocated GLFW resources.
     // ------------------------------------------------------------------
     glfwTerminate();
     return 0;
 }
-
 
 void drawObjects(){
 
@@ -169,12 +215,32 @@ void drawObjects(){
     shaderProgram->setMat4("model", viewProjection);
     floorObj.drawSceneObject();
 
-    // draw 2 cubes and 2 planes in different locations and with different orientations
-    drawCube(viewProjection * glm::translate(2.0f, 1.f, 2.0f) * glm::rotateY(glm::half_pi<float>()) * scale);
-    drawCube(viewProjection * glm::translate(-2.0f, 1.f, -2.0f) * glm::rotateY(glm::quarter_pi<float>()) * scale);
+    // draw a cube
+    drawCube(viewProjection * glm::translate(0.0f, 1.f, -4.0f) * glm::rotateY(glm::half_pi<float>()) * scale);
+}
 
-    drawPlane(viewProjection * glm::translate(-2.0f, .5f, 2.0f) * glm::rotateX(glm::quarter_pi<float>()) * scale);
-    drawPlane(viewProjection * glm::translate(2.0f, .5f, -2.0f) * glm::rotateX(glm::quarter_pi<float>() * 3.f) * scale);
+void drawParticles(){
+
+    glm::mat4 projectionMatrix = glm::perspectiveFov(70.0f, (float)SCR_WIDTH, (float)SCR_HEIGHT, .01f, 100.0f);
+    glm::mat4 viewMatrix = glm::lookAt(camPosition, camPosition + camForward, glm::vec3(0,1,0));
+    glm::mat4 viewProjectionMatrix = projectionMatrix * viewMatrix;
+
+    // draw floor (the floor was built so that it does not need to be transformed)
+    particleShaderProgram->setMat4("model", viewProjectionMatrix);
+
+    for(int i = 0; i < numberOfSimulations; i++){
+        // Update and calculate offset
+        gravityOffsets[i] += gravityOffsetDeltas[i];
+        xWindOffsets[i] += xWindOffsetDeltas[i];
+        zWindOffsets[i] += zWindOffsetDeltas[i];
+        glm::vec3 combinedOffset = glm::vec3(xWindOffsets[i], -gravityOffsets[i], zWindOffsets[i]);
+        combinedOffset -= camPosition + camForward + (boxSize/2);
+        combinedOffset = glm::mod(combinedOffset, boxSize);
+
+        particleShaderProgram->setVec3("combinedOffset", combinedOffset);
+
+        particlesObject.drawParticlesObject();
+    }
 }
 
 
@@ -184,43 +250,17 @@ void drawCube(glm::mat4 model){
     cube.drawSceneObject();
 }
 
-
-void drawPlane(glm::mat4 model){
-
-    // draw plane body and right wing
-    shaderProgram->setMat4("model", model);
-    planeBody.drawSceneObject();
-    planeWing.drawSceneObject();
-
-    // propeller,
-    glm::mat4 propeller = model * glm::translate(.0f, .5f, .0f) *
-                          glm::rotate(currentTime * 10.0f, glm::vec3(0.0,1.0,0.0)) *
-                          glm::rotate(glm::half_pi<float>(), glm::vec3(1.0,0.0,0.0)) *
-                          glm::scale(.5f, .5f, .5f);
-
-    shaderProgram->setMat4("model", propeller);
-    planePropeller.drawSceneObject();
-
-    // right wing back,
-    glm::mat4 wingRightBack = model * glm::translate(0.0f, -0.5f, 0.0f) * glm::scale(.5f,.5f,.5f);
-    shaderProgram->setMat4("model", wingRightBack);
-    planeWing.drawSceneObject();
-
-    // left wing,
-    glm::mat4 wingLeft = model * glm::scale(-1.0f, 1.0f, 1.0f);
-    shaderProgram->setMat4("model", wingLeft);
-    planeWing.drawSceneObject();
-
-    // left wing back,
-    glm::mat4 wingLeftBack =  model *  glm::translate(0.0f, -0.5f, 0.0f) * glm::scale(-.5f,.5f,.5f);
-    shaderProgram->setMat4("model", wingLeftBack);
-    planeWing.drawSceneObject();
+float randBetween(float min, float max){
+    float random = ((float) rand()) / (float) RAND_MAX;
+    float diff = max - min;
+    float r = random * diff;
+    return min + r;
 }
 
 
-
 void setup(){
-    // initialize shaders
+    // initialize object shader
+    //-------------------
     shaderProgram = new Shader("shaders/objectShader.vert", "shaders/objectShader.frag");
 
     // load floor mesh into openGL
@@ -231,15 +271,58 @@ void setup(){
     cube.VAO = createVertexArray(cubeVertices, cubeColors, cubeIndices);
     cube.vertexCount = cubeIndices.size();
 
-    // load plane meshes into openGL
-    planeBody.VAO = createVertexArray(planeBodyVertices, planeBodyColors, planeBodyIndices);
-    planeBody.vertexCount = planeBodyIndices.size();
+    // initialize object shader
+    //-------------------
+    particleShaderProgram = new Shader("shaders/particleShader.vert", "shaders/particleShader.frag");
+    particlesObject.VAO = createParticleVertexArray();
+    initializeOffsetsAndOffsetDeltas();
+}
 
-    planeWing.VAO = createVertexArray(planeWingVertices, planeWingColors, planeWingIndices);
-    planeWing.vertexCount = planeWingIndices.size();
+void initializeOffsetsAndOffsetDeltas(){
+    //Initialize offset for each simulation
+    for(int i = 0; i < numberOfSimulations; i++){
+        // Each simulation should begin with an offset of 0
+        xWindOffsets[i] = 0.0f;
+        zWindOffsets[i] = 0.0f;
+        gravityOffsets[i] = 0.0f;
+        // Each simulation should change with a random amount
+        xWindOffsetDeltas[i] = randBetween(.05, .1);
+        xWindOffsetDeltas[i] = randBetween(.05, .1);
+        gravityOffsetDeltas[i] = randBetween(.1, .3);
+    }
+}
 
-    planePropeller.VAO = createVertexArray(planePropellerVertices, planePropellerColors, planePropellerIndices);
-    planePropeller.vertexCount = planePropellerIndices.size();
+unsigned int createParticleVertexArray() {
+    unsigned int VAO, VBO;
+    glGenVertexArrays(1, &VAO);
+    glGenBuffers(1, &VBO);
+
+    glBindVertexArray(VAO);
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+
+    // initialize particle buffer, set all values to 0
+    std::vector<float> data(particlesCount * particleSize);
+    for (unsigned int i = 0; i < data.size(); i += particleSize){
+        float x = randBetween(-15, 15);
+        float y = randBetween(-15, 15);
+        float z = randBetween(-15, 15);
+        data[i] = x;
+        data[i+1] = y;
+        data[i+2] = z;
+    }
+    // Update how many vertices should be drawn
+    particlesObject.vertexCount = data.size();
+
+    // allocate at openGL controlled memory
+    glBufferData(GL_ARRAY_BUFFER, particlesCount * particleSize * sizeOfFloat, &data[0], GL_DYNAMIC_DRAW);
+
+    // Bind position attribute
+    int posSize = 3; // each position has x,y,z
+    GLuint vertexPositionLocation = glGetAttribLocation(particleShaderProgram->ID, "pos");
+    glEnableVertexAttribArray(vertexPositionLocation);
+    glVertexAttribPointer(vertexPositionLocation, posSize, GL_FLOAT, GL_FALSE, 0, 0);
+
+    return VAO;
 }
 
 
@@ -275,6 +358,7 @@ unsigned int createArrayBuffer(const std::vector<float> &array){
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
     glBufferData(GL_ARRAY_BUFFER, array.size() * sizeof(GLfloat), &array[0], GL_STATIC_DRAW);
 
+
     return VBO;
 }
 
@@ -301,10 +385,6 @@ void cursorInRange(float screenX, float screenY, int screenW, int screenH, float
 }
 
 void cursor_input_callback(GLFWwindow* window, double posX, double posY){
-    std::cout << "pos x: " << posX << " pos y: " << posY << std::endl;
-    // TODO - rotate the camera position based on mouse movements
-    //  if you decide to use the lookAt function, make sure that the up vector and the
-    //  vector from the camera position to the lookAt target are not collinear
 
     int screenW, screenH;
     glfwGetWindowSize(window, &screenW, &screenH);

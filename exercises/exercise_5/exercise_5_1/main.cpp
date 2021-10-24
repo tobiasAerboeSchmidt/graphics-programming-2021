@@ -1,3 +1,4 @@
+
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 #include <iostream>
@@ -211,17 +212,20 @@ glm::mat4 viewProjection(){
     if (g_perspectiveProjection) {
         // TODO 5.1 - create a view matrix, that transforms points in the world coordinates to the camera coordinates
         //  you can use glm::lookat for that, set position to (0,0,2) and the camera forward to (0,0,-1)
-
+        glm::mat4 viewMatrix = glm::lookAt(glm::vec3(0.0f, 0.0f, 2.0f),  // position
+                                 glm::vec3(0.0f, 0.0f, 1.f),  // target
+                                 glm::vec3(0.0f, 1.0f, 0.0f)); // up
 
         // TODO 5.1 - create a projection using the glm::perspectiveFov function,
         //  and use it to view the object (i.e. multiply with model)
-
+        glm::mat4 projection = glm::perspectiveFov(glm::radians(70.0f), (float) SCR_WIDTH, (float) SCR_HEIGHT, .01f, 10.0f);
 
         // TODO 5.1 - multiply the matrices together in the right order to return the viewprojection matrix,
         //  you want the final matrix to first move points into camera coordinates, and then project
         //  press 6 to see the result
+        glm::mat4 viewProjectionMatrix = projection * viewMatrix;
 
-        return glm::mat4(1);
+        return viewProjectionMatrix;
     }
     else {
         // ortographic in the ndc range
@@ -288,7 +292,7 @@ void drawObject(){
 
 void setup(){
     // initialize shaders
-    shaderProgram = new Shader("shaders/shader.vert", "shaders/shader.frag");
+    shaderProgram = new Shader("shaders/objectShader.vert", "shaders/objectShader.frag");
 
     cube.VAO = createVertexArray(cubeVertices, cubeColors, cubeIndices);
     cube.vertexCount = cubeIndices.size();
