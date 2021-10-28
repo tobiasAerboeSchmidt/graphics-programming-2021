@@ -5,6 +5,7 @@ uniform mat4 model;
 uniform vec3 camPosition;
 uniform vec3 forwardOffset;
 uniform vec3 combinedOffset;
+uniform float precipitationSize;
 uniform float boxSize;
 
 
@@ -19,5 +20,5 @@ void main()
 
     // Make droplets close to the camera larger than those further away from the camera (distance equal to world space coords to camera position)
     float distanceToCamera = distance(newPos, camPosition);
-    gl_PointSize = mix(.01, .1, distanceToCamera);
+    gl_PointSize = precipitationSize*20 - mix(precipitationSize, precipitationSize*6, distanceToCamera / 10);
 }

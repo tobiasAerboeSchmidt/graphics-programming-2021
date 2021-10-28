@@ -22,14 +22,16 @@ float boxSize = 30; // Box size of 30m as defined in the paper
 
 // Create offsets and offset deltas for each simulation
 const unsigned int numberOfSimulations = 10;
-std::vector<float> gravityOffsets(numberOfSimulations);
-std::vector<float> xWindOffsets(numberOfSimulations);
-std::vector<float> zWindOffsets(numberOfSimulations);
-std::vector<float> gravityOffsetDeltas(numberOfSimulations);
-std::vector<float> xWindOffsetDeltas(numberOfSimulations);
-std::vector<float> zWindOffsetDeltas(numberOfSimulations);
+enum WeatherType {rain, snow, rainLine};
 
-
+struct ParticleOffsets{
+    float gravityOffsets[numberOfSimulations];
+    float xWindOffsets[numberOfSimulations];
+    float zWindOffsets[numberOfSimulations];
+    float gravityOffsetDeltas[numberOfSimulations];
+    float xWindOffsetDeltas[numberOfSimulations];
+    float zWindOffsetDeltas[numberOfSimulations];
+};
 
 struct SceneObject{
     unsigned int VAO;
@@ -43,16 +45,34 @@ struct SceneObject{
 struct ParticlesObject{
     unsigned int VAO;
     unsigned int vertexCount;
-    void drawParticlesObject() const{
+    void drawParticlesObjectAsPoints() const{
         glBindVertexArray(VAO);
         glDrawArrays(GL_POINTS, 0, vertexCount);
     }
+    void drawParticlesObjectAsLines() const{
+        glBindVertexArray(VAO);
+        glDrawArrays(GL_LINES, 0, vertexCount);
+    }
 };
+
+// global variables used for rendering
+// -----------------------------------
+SceneObject cube;
+SceneObject floorObj;
+ParticlesObject particlesObject;
+Shader* sceneShaderProgram;
+std::vector<Shader> particleShaderPrograms;
+Shader* activeParticleShader;
+std::vector<ParticleOffsets> particleOffsetsList;
+ParticleOffsets activeParticleOffsets;
+glm::mat4 previousViewProjectionModel;
+WeatherType currentWeatherType;
 
 // function declarations
 // ---------------------
+void setWeatherType(WeatherType);
 unsigned int createParticleVertexArray();
-void initializeOffsetsAndOffsetDeltas();
+void initializeParticleOffsets();
 unsigned int createArrayBuffer(const std::vector<float> &array);
 unsigned int createElementArrayBuffer(const std::vector<unsigned int> &array);
 unsigned int createVertexArray(const std::vector<float> &positions, const std::vector<float> &colors, const std::vector<unsigned int> &indices);
@@ -76,13 +96,26 @@ const unsigned int SCR_HEIGHT = 600;
 
 // P
 
-// global variables used for rendering
-// -----------------------------------
-SceneObject cube;
-SceneObject floorObj;
-ParticlesObject particlesObject;
-Shader* shaderProgram;
-Shader* particleShaderProgram;
+
+
+// global variables used for particle properties
+const float GRAVITY_MIN_RAIN = .5f;
+const float GRAVITY_MAX_RAIN = .7f;
+const float WIND_MIN_RAIN = .05f;
+const float WIND_MAX_RAIN = .1f;
+
+const float GRAVITY_MIN_SNOW = .05f;
+const float GRAVITY_MAX_SNOW = .15f;
+const float WIND_MIN_SNOW = .05f;
+const float WIND_MAX_SNOW = .1f;
+
+const float GRAVITY_MIN_LINE_RAIN = 1.f;
+const float GRAVITY_MAX_LINE_RAIN = 1.2f;
+const float WIND_MIN_LINE_RAIN = .005f;
+const float WIND_MAX_LINE_RAIN = .01f;
+
+const float RAIN_PRECIPITATION_SIZE = .1;
+const float SNOW_PRECIPITATION_SIZE = .3;
 
 // global variables used for control
 // ---------------------------------
@@ -127,9 +160,9 @@ int main()
         std::cout << "Failed to initialize GLAD" << std::endl;
         return -1;
     }
-
     // setup mesh objects
     // ---------------------------------------
+
     setup();
 
     // set up the z-buffer
@@ -166,16 +199,16 @@ int main()
 
         // Draw objects
         // ------------
-        shaderProgram->use();
+        sceneShaderProgram->use();
         drawObjects();
 
         // Draw particles
         // --------------
 
-        particleShaderProgram->use();
-        particleShaderProgram->setVec3("camPosition", camPosition);
-        particleShaderProgram->setVec3("forwardPosition", camPosition);
-        particleShaderProgram->setFloat("boxSize", boxSize);
+        activeParticleShader->use();
+        activeParticleShader->setVec3("camPosition", camPosition);
+        activeParticleShader->setVec3("forwardPosition", camPosition);
+        activeParticleShader->setFloat("boxSize", boxSize);
 
         drawParticles();
 
@@ -189,8 +222,7 @@ int main()
         }
     }
 
-    delete shaderProgram;
-    delete particleShaderProgram;
+    delete sceneShaderProgram;
 
     // glfw: terminate, clearing all previously allocated GLFW resources.
     // ------------------------------------------------------------------
@@ -212,7 +244,7 @@ void drawObjects(){
     glm::mat4 viewProjection = projection * view;
 
     // draw floor (the floor was built so that it does not need to be transformed)
-    shaderProgram->setMat4("model", viewProjection);
+    sceneShaderProgram->setMat4("model", viewProjection);
     floorObj.drawSceneObject();
 
     // draw a cube
@@ -226,27 +258,45 @@ void drawParticles(){
     glm::mat4 viewProjectionMatrix = projectionMatrix * viewMatrix;
 
     // draw floor (the floor was built so that it does not need to be transformed)
-    particleShaderProgram->setMat4("model", viewProjectionMatrix);
+    activeParticleShader->setMat4("model", viewProjectionMatrix);
 
     for(int i = 0; i < numberOfSimulations; i++){
         // Update and calculate offset
-        gravityOffsets[i] += gravityOffsetDeltas[i];
-        xWindOffsets[i] += xWindOffsetDeltas[i];
-        zWindOffsets[i] += zWindOffsetDeltas[i];
-        glm::vec3 combinedOffset = glm::vec3(xWindOffsets[i], -gravityOffsets[i], zWindOffsets[i]);
+        activeParticleOffsets.gravityOffsets[i] += activeParticleOffsets.gravityOffsetDeltas[i];
+        activeParticleOffsets.xWindOffsets[i] += activeParticleOffsets.xWindOffsetDeltas[i];
+        activeParticleOffsets.zWindOffsets[i] += activeParticleOffsets.zWindOffsetDeltas[i];
+        glm::vec3 combinedOffset = glm::vec3(activeParticleOffsets.xWindOffsets[i], -activeParticleOffsets.gravityOffsets[i], activeParticleOffsets.zWindOffsets[i]);
         combinedOffset -= camPosition + camForward + (boxSize/2);
         combinedOffset = glm::mod(combinedOffset, boxSize);
 
-        particleShaderProgram->setVec3("combinedOffset", combinedOffset);
+        activeParticleShader->setVec3("combinedOffset", combinedOffset);
 
-        particlesObject.drawParticlesObject();
+        if(currentWeatherType == WeatherType::rainLine) {
+            activeParticleShader->setMat4("prevModel", previousViewProjectionModel);
+            activeParticleShader->setFloat("heightScale", 1.2);
+            activeParticleShader->setVec3("g_vVelocity", glm::vec3(activeParticleOffsets.xWindOffsetDeltas[i],
+                                                                   -activeParticleOffsets.gravityOffsetDeltas[i],
+                                                                   -activeParticleOffsets.zWindOffsetDeltas[i]));
+            particlesObject.drawParticlesObjectAsLines();
+        }
+        else {
+            if(currentWeatherType == WeatherType::rain){
+                activeParticleShader->setFloat("precipitationSize", RAIN_PRECIPITATION_SIZE);
+            } else {
+                activeParticleShader->setFloat("precipitationSize", SNOW_PRECIPITATION_SIZE);
+            }
+            particlesObject.drawParticlesObjectAsPoints();
+        }
+
+
     }
+    previousViewProjectionModel = viewProjectionMatrix;
 }
 
 
 void drawCube(glm::mat4 model){
     // draw object
-    shaderProgram->setMat4("model", model);
+    sceneShaderProgram->setMat4("model", model);
     cube.drawSceneObject();
 }
 
@@ -261,7 +311,7 @@ float randBetween(float min, float max){
 void setup(){
     // initialize object shader
     //-------------------
-    shaderProgram = new Shader("shaders/objectShader.vert", "shaders/objectShader.frag");
+    sceneShaderProgram = new Shader("shaders/objectShader.vert", "shaders/objectShader.frag");
 
     // load floor mesh into openGL
     floorObj.VAO = createVertexArray(floorVertices, floorColors, floorIndices);
@@ -271,24 +321,55 @@ void setup(){
     cube.VAO = createVertexArray(cubeVertices, cubeColors, cubeIndices);
     cube.vertexCount = cubeIndices.size();
 
-    // initialize object shader
+    // initialize particle shaders
     //-------------------
-    particleShaderProgram = new Shader("shaders/particleShader.vert", "shaders/particleShader.frag");
+
+    particleShaderPrograms.push_back(Shader("shaders/particlePointShader.vert", "shaders/particlePointShader.frag"));
+    particleShaderPrograms.push_back(Shader("shaders/particleLineShader.vert", "shaders/particleLineShader.frag"));
+
     particlesObject.VAO = createParticleVertexArray();
-    initializeOffsetsAndOffsetDeltas();
+    initializeParticleOffsets();
+    setWeatherType(WeatherType::rainLine);
 }
 
-void initializeOffsetsAndOffsetDeltas(){
-    //Initialize offset for each simulation
+void initializeParticleOffsets(){
+
+    particleOffsetsList.push_back(ParticleOffsets());
+    particleOffsetsList.push_back(ParticleOffsets());
+    particleOffsetsList.push_back(ParticleOffsets());
+
+    //Initialize offset for each simulation for each weather type
     for(int i = 0; i < numberOfSimulations; i++){
         // Each simulation should begin with an offset of 0
-        xWindOffsets[i] = 0.0f;
-        zWindOffsets[i] = 0.0f;
-        gravityOffsets[i] = 0.0f;
+        particleOffsetsList[0].xWindOffsets[i] = 0.0f;
+        particleOffsetsList[0].zWindOffsets[i] = 0.0f;
+        particleOffsetsList[0].gravityOffsets[i] = 0.0f;
         // Each simulation should change with a random amount
-        xWindOffsetDeltas[i] = randBetween(.05, .1);
-        xWindOffsetDeltas[i] = randBetween(.05, .1);
-        gravityOffsetDeltas[i] = randBetween(.1, .3);
+        particleOffsetsList[0].xWindOffsetDeltas[i] = randBetween(WIND_MIN_RAIN, WIND_MAX_RAIN);
+        particleOffsetsList[0].xWindOffsetDeltas[i] = randBetween(WIND_MIN_RAIN, WIND_MAX_RAIN);
+        particleOffsetsList[0].gravityOffsetDeltas[i] = randBetween(GRAVITY_MIN_RAIN, GRAVITY_MAX_RAIN);
+    }
+
+    for(int i = 0; i < numberOfSimulations; i++){
+        // Each simulation should begin with an offset of 0
+        particleOffsetsList[1].xWindOffsets[i] = 0.0f;
+        particleOffsetsList[1].zWindOffsets[i] = 0.0f;
+        particleOffsetsList[1].gravityOffsets[i] = 0.0f;
+        // Each simulation should change with a random amount
+        particleOffsetsList[1].xWindOffsetDeltas[i] = randBetween(WIND_MIN_SNOW, WIND_MAX_SNOW);
+        particleOffsetsList[1].xWindOffsetDeltas[i] = randBetween(WIND_MIN_SNOW, WIND_MAX_SNOW);
+        particleOffsetsList[1].gravityOffsetDeltas[i] = randBetween(GRAVITY_MIN_SNOW, GRAVITY_MAX_SNOW);
+    }
+
+    for(int i = 0; i < numberOfSimulations; i++){
+        // Each simulation should begin with an offset of 0
+        particleOffsetsList[2].xWindOffsets[i] = 0.0f;
+        particleOffsetsList[2].zWindOffsets[i] = 0.0f;
+        particleOffsetsList[2].gravityOffsets[i] = 0.0f;
+        // Each simulation should change with a random amount
+        particleOffsetsList[2].xWindOffsetDeltas[i] = randBetween(WIND_MIN_LINE_RAIN, WIND_MAX_LINE_RAIN);
+        particleOffsetsList[2].xWindOffsetDeltas[i] = randBetween(WIND_MIN_LINE_RAIN, WIND_MAX_LINE_RAIN);
+        particleOffsetsList[2].gravityOffsetDeltas[i] = randBetween(GRAVITY_MIN_LINE_RAIN, GRAVITY_MAX_LINE_RAIN);
     }
 }
 
@@ -301,26 +382,31 @@ unsigned int createParticleVertexArray() {
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
 
     // initialize particle buffer, set all values to 0
-    std::vector<float> data(particlesCount * particleSize);
-    for (unsigned int i = 0; i < data.size(); i += particleSize){
+    // Duplicate points for when drawing rain as lines
+    std::vector<float> data(particlesCount * 2 * particleSize);
+    for (unsigned int i = 0; i < data.size(); i += 2 * particleSize){
         float x = randBetween(-15, 15);
         float y = randBetween(-15, 15);
         float z = randBetween(-15, 15);
+        // x, y, z
         data[i] = x;
         data[i+1] = y;
         data[i+2] = z;
+        // x, y, z for other end of line
+        data[i+3] = x;
+        data[i+4] = y;
+        data[i+5] = z;
     }
     // Update how many vertices should be drawn
     particlesObject.vertexCount = data.size();
 
     // allocate at openGL controlled memory
-    glBufferData(GL_ARRAY_BUFFER, particlesCount * particleSize * sizeOfFloat, &data[0], GL_DYNAMIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, particlesCount * 2 * particleSize * sizeOfFloat, &data[0], GL_DYNAMIC_DRAW);
 
     // Bind position attribute
     int posSize = 3; // each position has x,y,z
-    GLuint vertexPositionLocation = glGetAttribLocation(particleShaderProgram->ID, "pos");
-    glEnableVertexAttribArray(vertexPositionLocation);
-    glVertexAttribPointer(vertexPositionLocation, posSize, GL_FLOAT, GL_FALSE, 0, 0);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, posSize, GL_FLOAT, GL_FALSE, 0, 0);
 
     return VAO;
 }
@@ -334,13 +420,13 @@ unsigned int createVertexArray(const std::vector<float> &positions, const std::v
 
     // set vertex shader attribute "pos"
     createArrayBuffer(positions); // creates and bind  the VBO
-    int posAttributeLocation = glGetAttribLocation(shaderProgram->ID, "pos");
+    int posAttributeLocation = glGetAttribLocation(sceneShaderProgram->ID, "pos");
     glEnableVertexAttribArray(posAttributeLocation);
     glVertexAttribPointer(posAttributeLocation, 3, GL_FLOAT, GL_FALSE, 0, 0);
 
     // set vertex shader attribute "color"
     createArrayBuffer(colors); // creates and bind the VBO
-    int colorAttributeLocation = glGetAttribLocation(shaderProgram->ID, "color");
+    int colorAttributeLocation = glGetAttribLocation(sceneShaderProgram->ID, "color");
     glEnableVertexAttribArray(colorAttributeLocation);
     glVertexAttribPointer(colorAttributeLocation, 4, GL_FLOAT, GL_FALSE, 0, 0);
 
@@ -421,6 +507,24 @@ void cursor_input_callback(GLFWwindow* window, double posX, double posY){
 
 }
 
+void setWeatherType(WeatherType newWeatherType){
+    currentWeatherType = newWeatherType;
+    switch(newWeatherType){
+        case WeatherType::rain:
+            activeParticleShader = &particleShaderPrograms[0];
+            activeParticleOffsets = particleOffsetsList[0];
+            break;
+        case WeatherType::snow:
+            activeParticleShader = &particleShaderPrograms[0];
+            activeParticleOffsets = particleOffsetsList[1];
+            break;
+        case WeatherType::rainLine:
+            activeParticleShader = &particleShaderPrograms[1];
+            activeParticleOffsets = particleOffsetsList[1];
+            break;
+    }
+}
+
 void processInput(GLFWwindow *window) {
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
@@ -434,6 +538,15 @@ void processInput(GLFWwindow *window) {
         camPosition -= forward * linearSpeed;
     if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
         camPosition += glm::cross(forward, glm::vec3(0.0f, 1.0f, 0.0f)) * linearSpeed;
+    if (glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS){
+        setWeatherType(WeatherType::rain);
+    }
+    if (glfwGetKey(window, GLFW_KEY_2) == GLFW_PRESS){
+        setWeatherType(WeatherType::snow);
+    }
+    if (glfwGetKey(window, GLFW_KEY_3) == GLFW_PRESS){
+        setWeatherType(WeatherType::rainLine);
+    }
 
 }
 
